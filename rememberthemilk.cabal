@@ -1,0 +1,42 @@
+name: rememberthemilk
+version: 0.0.1
+synopsis: Haskell implementation of the RememberTheMilk API
+description:
+   Will implement the RememberTheMilk REST API. RTM is a task management system.
+   Found out more at <http://rememberthemilk.com>.
+
+category:           Web
+license:            BSD3
+license-file:       LICENSE
+author:             Michael Xavier <michael@michaelxavier.net>
+maintainer:         Michael Xavier <michael@michaelxavier.net>
+cabal-version:      >= 1.6
+build-type:         Simple
+extra-source-files: README CHANGELOG
+homepage:           http://github.com/michaelxavier/RememberTheMilk
+
+library
+ Exposed-modules: Web.RememberTheMilk,
+                  Web.RememberTheMilk.Types,
+                  Web.RememberTheMilk.Monad
+ Ghc-Options:     -Wall
+ build-depends:   base              >= 4        && < 5,
+                  base16-bytestring >= 0.1.1.2  && < 0.2,
+                  aeson             >= 0.3.1.1  && < 0.4,
+                  attoparsec        >= 0.9.1.2  && < 0.10,
+                  containers        >= 0.4.0.0  && < 0.5,
+                  bytestring        >= 0.9.1.10 && < 0.10,
+                  enumerator        >= 0.4.9    && < 0.5,
+                  haskell98         >= 1.1.0.1  && < 1.2,
+                  http-enumerator   >= 0.7.0    && < 0.8,
+                  http-types        >= 0.6.0    && < 0.7,
+                  mtl               >= 2.0.1.0  && < 2.1,
+                  puremd5           >= 2.1.0.3  && < 2.2,
+                  text              >= 0.11.0.5 && < 0.12,
+                  time              >= 1.2.0.3  && < 1.5,
+                  transformers      >= 0.2.2.0  && < 0.3,
+                  url               >= 2.1.2    && < 2.3
+
+source-repository head
+  type:     git
+  location: git://github.com/michaelxavier/RememberTheMilk.git
