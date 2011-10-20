@@ -19,8 +19,8 @@ import Control.Monad.Reader
 
 --TODO: get token from frob
 
-data RTMAuth = APIKey Text |   -- ^ Authentication using an API key
-               OAuthToken Text -- ^ Authenticate using a token obtianed via OAuth V2. Currently no way in the library to obtain refresh tokens
+data RTMAuth = APIKey Text |  -- ^ Authentication using an API key
+               AuthToken Text -- ^ Authenticate using a token obtianed via OAuth V2. Currently no way in the library to obtain refresh tokens
 
 type RTMSecret = Text
 
