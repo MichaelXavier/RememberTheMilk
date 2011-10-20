@@ -19,13 +19,13 @@ import Control.Monad.Reader
 
 --TODO: get token from frob
 
-data RTMAuth = APIKey Text |  -- ^ Authentication using an API key
-               AuthToken Text -- ^ Authenticate using a token obtianed via OAuth V2. Currently no way in the library to obtain refresh tokens
-
 type RTMSecret = Text
+type RTMKey    = Text
+type RTMToken   = Text
 
 -- | Environment passed into requests when they are executed within a RTMM
-data RTMEnv = RTMEnv { rtmAuth :: RTMAuth,    -- ^ Preferred RememberTheMilk authentication
+data RTMEnv = RTMEnv { rtmKey    :: RTMKey,    -- ^ API key
+                       rtmToken  :: Text,   -- ^ Authorization token
                        rtmSecret :: RTMSecret -- ^ Shared secret used for signing requests
                      }
 

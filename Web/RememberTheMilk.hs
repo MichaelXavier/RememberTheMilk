@@ -13,12 +13,17 @@
 -- 
 --------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
-module Web.RememberTheMilk () where
+module Web.RememberTheMilk (addContact,
+                            deleteContact,
+                            enumContacts,
+                            getContacts,
+                            doGet -- DEBUGGING
+                            ) where
 
 import Web.RememberTheMilk.Monad
 
 import           Control.Monad.IO.Class (liftIO)
-import           Control.Monad.Reader (runReaderT) --DEBUGGING
+import           Control.Monad.Reader (ask)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Base16 as BS16
@@ -32,49 +37,55 @@ import           Data.Ord (comparing)
 import           Network.HTTP.Enumerator
 import           Network.HTTP.Types (Query(..), renderQuery)
 
+
+---- Contacts
+
+addContact = undefined
+deleteContact = undefined
+enumContacts = undefined
+getContacts = undefined
+
 ---- Helpers
 
 doGet :: Query 
-         -> RTMSecret
-         -> RTMAuth
+         -> RTMEnv
          -> Text
          -> RTMM (Int, LBS.ByteString)
-doGet qs sec auth meth = liftIO $ withManager $ \manager -> do
+doGet qs env meth = liftIO $ withManager $ \manager -> do
   Response { statusCode = c, responseBody = b} <- httpLbsRedirect req manager
   return (c, b)
-  where req = genRequest qs sec auth meth
+  where req = genRequest qs env meth
 
 --TODO: probably take RTMAuth instead of piecemeal
 genRequest :: Query
-              -> RTMSecret
-              -> RTMAuth
+              -> RTMEnv
               -> Text
               -> Request m
-genRequest qs sec auth meth = def { host        = h,
-                                    path        = pth,
-                                    port        = 443,
-                                    secure      = True,
-                                    queryString = qs' }
+genRequest qs env meth = def { host        = h,
+                               path        = pth,
+                               port        = 443,
+                               secure      = True,
+                               queryString = qs' }
   where h   = "api.rememberthemilk.com"
         pth = "/services/rest/"
-        qs' = finalizeQuery qs sec auth meth
+        qs' = finalizeQuery qs env meth
 
 finalizeQuery :: Query
-                 -> RTMSecret
-                 -> RTMAuth
+                 -> RTMEnv
                  -> Text
                  -> Query
-finalizeQuery qs sec auth meth = fmtQ:keyQ:methQ:qs
+finalizeQuery qs RTMEnv { rtmKey    = key,
+                          rtmToken  = tok,
+                          rtmSecret = sec} meth = signQuery sec $ fmtQ:keyQ:tokQ:methQ:qs
   where methQ = ("method", Just $ encodeUtf8 meth)
         fmtQ  = ("format", Just "json")
-        keyQ  = case auth of
-                  APIKey key    -> ("api_key", Just $ encodeUtf8 key)
-                  AuthToken tok -> ("auth_token", Just $ encodeUtf8 tok)
+        keyQ  = ("api_key", Just $ encodeUtf8 key)
+        tokQ  = ("auth_token", Just $ encodeUtf8 tok)
 
-signQuery :: Query
-             -> RTMSecret
+signQuery :: RTMSecret
              -> Query
-signQuery qs sec = sigQ:qs
+             -> Query
+signQuery sec qs = sigQ:qs
   where sigQ = ("api_sig", Just $ genSignature qs sec)
 
 genSignature:: Query
@@ -85,3 +96,7 @@ genSignature params sec = BS16.encode . encode . md5 . LBS.fromChunks $ secBS:so
         secBS                = encodeUtf8 sec
         concatQ (k, Just v)  = k `BS.append` v
         concatQ (k, Nothing) = k
+
+withEnv :: (RTMEnv -> RTMM a)
+           -> RTMM a
+withEnv fn = fn =<< ask
