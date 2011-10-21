@@ -17,21 +17,31 @@ module Web.RememberTheMilk (addContact,
                             deleteContact,
                             enumContacts,
                             getContacts,
+                            getFrob,
                             doGet -- DEBUGGING
                             ) where
 
 import Web.RememberTheMilk.Monad
+import Web.RememberTheMilk.Types
 
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Reader (ask)
+import           Data.Aeson (json,
+                             FromJSON,
+                             fromJSON,
+                             parseJSON,
+                             Result(..),
+                             (.:),
+                             Value(Object, String))
+import           Data.Attoparsec.Lazy (parse, eitherResult)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Base16 as BS16
 import           Data.ByteString (ByteString, append)
 import           Data.Serialize (encode)
 import           Data.Digest.Pure.MD5 (md5)
-import           Data.Text (Text)
-import           Data.Text.Encoding (encodeUtf8)
+import           Data.Text (Text, pack)
+import           Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import           Data.List (sortBy)
 import           Data.Ord (comparing)
 import           Network.HTTP.Enumerator
@@ -45,7 +55,25 @@ deleteContact = undefined
 enumContacts = undefined
 getContacts = undefined
 
+getFrob :: RTMM (RTMResponse Frob)
+getFrob = genericGet [] "rtm.auth.getFrob"
+
 ---- Helpers
+
+genericGet :: FromJSON a => Query
+                            -> Text
+                            -> RTMM (RTMResponse a)
+genericGet qs meth = withEnv $ \env -> return . handleResponse =<< doGet qs env meth
+
+handleResponse :: FromJSON a => (Int, LBS.ByteString)
+                                -> RTMResponse a
+handleResponse (200, str) = either parseFail fjson  parsed
+  where fjson v = case fromJSON v of
+                    Success a -> Right a
+                    Error e   -> Left $ RTMFail 0 $ pack e
+        parseFail err = Left $ RTMFail 0 $ pack err
+        parsed  = eitherResult $ parse json str
+handleResponse (_, str) = Left $ RTMFail 0 $ decodeUtf8 . BS.concat . LBS.toChunks $ str
 
 doGet :: Query 
          -> RTMEnv
