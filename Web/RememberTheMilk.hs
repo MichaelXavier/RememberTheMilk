@@ -18,8 +18,7 @@ module Web.RememberTheMilk (addContact,
                             enumContacts,
                             getContacts,
                             getFrob,
-                            doGet -- DEBUGGING
-                            ) where
+                            genAuthUrl) where
 
 import Web.RememberTheMilk.Monad
 import Web.RememberTheMilk.Types
@@ -34,6 +33,7 @@ import           Data.Aeson (json,
                              (.:),
                              Value(Object, String))
 import           Data.Attoparsec.Lazy (parse, eitherResult)
+import           Data.ByteString.Char8 (unpack)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Base16 as BS16
@@ -44,9 +44,9 @@ import           Data.Text (Text, pack)
 import           Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import           Data.List (sortBy)
 import           Data.Ord (comparing)
+import qualified Network.URL as U
 import           Network.HTTP.Enumerator
 import           Network.HTTP.Types (Query(..), renderQuery)
-
 
 ---- Contacts
 
@@ -57,6 +57,28 @@ getContacts = undefined
 
 getFrob :: RTMM (RTMResponse Frob)
 getFrob = genericGet [] "rtm.auth.getFrob"
+
+genAuthUrl :: Frob
+              -> RTMSecret
+              -> RTMKey
+              -> RTMPermissions
+              -> U.URL
+genAuthUrl frob sec key perms = U.URL { U.url_type   = ut,
+                                        U.url_path   = up,
+                                        U.url_params = params }
+  where ut             = U.Absolute hst
+        up             = "/services/auth/"
+        hst            = U.Host { U.protocol = (U.HTTP True),
+                                  U.host     = "www.rememberthemilk.com",
+                                  U.port     = Nothing }
+        params         = map convert $ signQuery sec [keyQ, permQ, frobQ frob]
+        keyQ           = ("api_key", Just $ encodeUtf8 key)
+        permQ          = ("perms", Just $ permVal perms)
+        frobQ (Frob f) = ("frob", Just $ encodeUtf8 f)
+        permVal Read   = "read"
+        permVal Write  = "write"
+        permVal Delete = "delete"
+        convert (k, v) = (unpack k, maybe "" unpack v)
 
 ---- Helpers
 

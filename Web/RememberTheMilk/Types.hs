@@ -13,6 +13,7 @@
 
 {-# LANGUAGE OverloadedStrings, TypeSynonymInstances #-}
 module Web.RememberTheMilk.Types (Frob(..),
+                                  RTMPermissions(..),
                                   RTMFail(..),
                                   RTMResponse(..)) where
 
@@ -40,6 +41,8 @@ type Code = Int
 type RTMResponse a = Either RTMFail a
 
 data RTMFail = RTMFail Code Text deriving (Show, Eq)
+
+data RTMPermissions = Read | Write | Delete deriving (Show, Eq)
 
 instance FromJSON a => FromJSON (RTMResponse a) where
   parseJSON obj@(Object v) = parseStat $ obj `dv` ["rsp", "stat"]
