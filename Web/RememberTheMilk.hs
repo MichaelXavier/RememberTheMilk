@@ -15,14 +15,19 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Web.RememberTheMilk (addContact,
                             deleteContact,
-                            enumContacts,
                             getContacts,
+                            getGroups,
                             getFrob,
+                            getToken,
+                            doGet,--DEBUG
+                            checkToken,
                             genAuthUrl) where
 
 import Web.RememberTheMilk.Monad
 import Web.RememberTheMilk.Types
+import Web.RememberTheMilk.ParseHelpers
 
+import           Control.Applicative ((<$>), (<*>))
 import           Control.Monad.IO.Class (liftIO)
 import           Control.Monad.Reader (ask)
 import           Data.Aeson (json,
@@ -32,6 +37,7 @@ import           Data.Aeson (json,
                              Result(..),
                              (.:),
                              Value(Object, String))
+import           Data.Aeson.Types (typeMismatch)
 import           Data.Attoparsec.Lazy (parse, eitherResult)
 import           Data.ByteString.Char8 (unpack)
 import qualified Data.ByteString as BS
@@ -52,22 +58,36 @@ import           Network.HTTP.Types (Query(..), renderQuery)
 
 addContact = undefined
 deleteContact = undefined
-enumContacts = undefined
-getContacts = undefined
+
+getContacts :: RTMM (RTMResponse [User])
+getContacts = return . fmap unContacts =<< genericGet [] "rtm.contacts.getList"
+
+---- Groups
+getGroups :: RTMM (RTMResponse [Group])
+getGroups = return . fmap unGroups =<< genericGet [] "rtm.groups.getList"
+
+---- Authentication
 
 getFrob :: RTMM (RTMResponse Frob)
 getFrob = genericGet [] "rtm.auth.getFrob"
 
+getToken :: Frob -> RTMM (RTMResponse RTMTokenSummary)
+getToken (Frob frob) = genericGet params "rtm.auth.getToken"
+  where params = [("frob", Just $ encodeUtf8 frob)]
+
+checkToken :: RTMM (RTMResponse RTMTokenSummary)
+checkToken = genericGet [] "rtm.auth.checkToken"
+
 genAuthUrl :: Frob
               -> RTMSecret
               -> RTMKey
-              -> RTMPermissions
+              -> Permissions
               -> U.URL
 genAuthUrl frob sec key perms = U.URL { U.url_type   = ut,
                                         U.url_path   = up,
                                         U.url_params = params }
   where ut             = U.Absolute hst
-        up             = "/services/auth/"
+        up             = "services/auth/"
         hst            = U.Host { U.protocol = (U.HTTP True),
                                   U.host     = "www.rememberthemilk.com",
                                   U.port     = Nothing }
@@ -89,9 +109,9 @@ genericGet qs meth = withEnv $ \env -> return . handleResponse =<< doGet qs env 
 
 handleResponse :: FromJSON a => (Int, LBS.ByteString)
                                 -> RTMResponse a
-handleResponse (200, str) = either parseFail fjson  parsed
+handleResponse (200, str) = either parseFail fjson parsed
   where fjson v = case fromJSON v of
-                    Success a -> Right a
+                    Success a -> a
                     Error e   -> Left $ RTMFail 0 $ pack e
         parseFail err = Left $ RTMFail 0 $ pack err
         parsed  = eitherResult $ parse json str

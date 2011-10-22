@@ -11,13 +11,24 @@
 --
 --------------------------------------------------------------------
 
-{-# LANGUAGE OverloadedStrings, TypeSynonymInstances #-}
+{-# LANGUAGE OverloadedStrings, TypeSynonymInstances, FlexibleInstances #-}
 module Web.RememberTheMilk.Types (Frob(..),
-                                  RTMPermissions(..),
+                                  User(..),
+                                  Group(..),
+                                  Contacts(..),
+                                  Groups(..),
+                                  Permissions(..),
+                                  RTMTokenSummary(..),
                                   RTMFail(..),
-                                  RTMResponse(..)) where
+                                  RTMResponse(..),
+                                  RTMSecret,
+                                  RTMKey,
+                                  RTMToken,
+                                  RTMEnv(..)) where
 
-import           Control.Applicative ((<$>), (<*>), pure, Applicative)
+import Web.RememberTheMilk.ParseHelpers
+
+import           Control.Applicative ((<$>), (<*>), pure)
 import           Data.Aeson (Value(..),
                              Object,
                              FromJSON,
@@ -25,10 +36,8 @@ import           Data.Aeson (Value(..),
                              (.:),
                              (.:?))
 import           Data.Aeson.Types (Parser, typeMismatch)
-import           Data.List (intercalate)
 import qualified Data.Map as M
 import           Data.Text (Text, unpack)
-import qualified Data.Text as T
 
 data Frob = Frob Text deriving (Show, Eq)
 
@@ -36,41 +45,87 @@ instance FromJSON Frob where
   parseJSON (Object v) = Frob <$> v .:/ ["rsp", "frob"]
   parseJSON v          = typeMismatch "Frob" v
 
+type ID = Text
+
 type Code = Int
 
 type RTMResponse a = Either RTMFail a
 
 data RTMFail = RTMFail Code Text deriving (Show, Eq)
 
-data RTMPermissions = Read | Write | Delete deriving (Show, Eq)
+data Permissions = Read | Write | Delete deriving (Show, Eq)
 
+instance FromJSON Permissions where
+  parseJSON (String "read")   = pure Read
+  parseJSON (String "write")  = pure Write
+  parseJSON (String "delete") = pure Delete
+  parseJSON v                 = typeMismatch "Permissions" v
+
+--Sweet mother this is nasty
 instance FromJSON a => FromJSON (RTMResponse a) where
-  parseJSON obj@(Object v) = parseStat $ obj `dv` ["rsp", "stat"]
-    where parseStat (Just (String "fail")) = Left <$> parsedFail
-          parseStat (Just (String "ok"))   = Right <$> parseJSON obj
-          parseStat (Just stat)            = typeMismatch "Response stat" stat
-          parseStat Nothing                = fail "Could not find rsp/stat"
-          parsedFail                       = RTMFail <$> v .:/ ["rsp", "stat", "code"]
-                                                     <*> v .:/ ["rsp", "stat", "msg"]
+  parseJSON obj@(Object v) = objLookup "rsp" parseRsp obj
+    where parseRsp root = objLookup "stat" parseStat root
+          parseStat (String "fail") = Left <$> parsedFail
+          parseStat (String "ok")   = Right <$> v .: "rsp" --TODO: need to figure out how to get the path in at this part
+          parseStat stat            = typeMismatch "Response stat" stat
+          parsedFail                       = RTMFail <$> v .:/ ["rsp", "err", "code"]
+                                                     <*> v .:/ ["rsp", "err", "msg"]
+          objLookup key fn (Object val) = maybe (fail $ unpack key ++ " not found") fn $ M.lookup key val
+          objLookup key _ _ = fail $ unpack key ++ " not found in non-object"
   parseJSON v              = typeMismatch "RTMResponse" v
 
 
----- Helpers
-(.:/) :: (FromJSON a) => Object
-                         -> [Text]
-                         -> Parser a
-obj .:/ (k:ks) = maybe (fail msg) parseJSON parsed
- where parsed = deepValue ks =<< M.lookup k obj
-       msg    = "Failed to find " ++ (intercalate "/" $ map unpack (k:ks))
-obj .:/ []     = parseJSON $ Object obj
+data RTMTokenSummary = RTMTokenSummary { toksumToken :: RTMToken,
+                                         toksumPerms :: Permissions,
+                                         toksumUser  :: User } deriving (Show, Eq)
 
-deepValue :: [Text]
-             -> Value
-             -> Maybe Value
-deepValue (k:[]) (Object obj) = M.lookup k obj
-deepValue (k:[]) _            = Nothing
-deepValue (k:ks) (Object obj) = deepValue ks =<< M.lookup k obj
-deepValue (k:ks) _            = Nothing
-deepValue [] v                = Just v
+instance FromJSON RTMTokenSummary where
+  parseJSON (Object v) = RTMTokenSummary <$> v .: "token"
+                                         <*> v .: "perms"
+                                         <*> v .: "user"
+  parseJSON v          = typeMismatch "RTMTokenSummary" v
 
-dv = flip deepValue
+
+data User = User { userId       :: ID,
+                   userFullname :: Maybe Text,
+                   userName     :: Maybe Text
+                 } deriving (Show, Eq)
+
+instance FromJSON User where
+  parseJSON (Object v) = User <$> v .: "id"
+                              <*> v .:? "fullname"
+                              <*> v .:? "username"
+  parseJSON v          = typeMismatch "RTMTokenSummary" v
+
+data Group = Group { groupId       :: ID,
+                     groupName     :: Text,
+                     groupContacts :: [User] } deriving (Show, Eq)
+
+instance FromJSON Group where
+  parseJSON obj@(Object v) = Group <$> v .: "id"
+                                         <*> v .: "name"
+                                         <*> (unContacts `fmap` parseJSON obj)
+  parseJSON v          = typeMismatch "Group" v
+
+type RTMSecret = Text
+type RTMKey    = Text
+type RTMToken   = Text
+
+-- | Environment passed into requests when they are executed within a RTMM
+data RTMEnv = RTMEnv { rtmKey    :: RTMKey,    -- ^ API key
+                       rtmToken  :: Text,   -- ^ Authorization token
+                       rtmSecret :: RTMSecret -- ^ Shared secret used for signing requests
+                     }
+
+---- Internals, have to export to avoid circular dependency
+data Contacts = Contacts { unContacts :: [User]}
+
+instance FromJSON Contacts where
+  parseJSON (Object v)    = Contacts <$> v `listAttribute` ["contacts", "contact"]
+  parseJSON v             = typeMismatch "Contacts" v
+
+data Groups = Groups { unGroups :: [Group]}
+
+instance FromJSON Groups where
+  parseJSON (Object v)    = Groups <$> v `listAttribute` ["groups", "group"]
+  parseJSON v             = typeMismatch "Groups" v

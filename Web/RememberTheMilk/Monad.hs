@@ -14,20 +14,10 @@
 {-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving #-}
 module Web.RememberTheMilk.Monad where
 
+import Web.RememberTheMilk.Types
+
 import Data.Text (Text,unpack)
 import Control.Monad.Reader
-
---TODO: get token from frob
-
-type RTMSecret = Text
-type RTMKey    = Text
-type RTMToken   = Text
-
--- | Environment passed into requests when they are executed within a RTMM
-data RTMEnv = RTMEnv { rtmKey    :: RTMKey,    -- ^ API key
-                       rtmToken  :: Text,   -- ^ Authorization token
-                       rtmSecret :: RTMSecret -- ^ Shared secret used for signing requests
-                     }
 
 -- | IO wrapper used to compose/sequence RTM API actions. See Web.RTM docs for examples
 newtype RTMM a = RTMM {unRTMM :: ReaderT RTMEnv IO a} 
