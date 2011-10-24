@@ -17,6 +17,7 @@ module Web.RememberTheMilk (addContact,
                             deleteContact,
                             getContacts,
                             getGroups,
+                            getTasks,
                             getFrob,
                             getToken,
                             doGet,--DEBUG
@@ -39,13 +40,16 @@ import           Data.Aeson (json,
                              Value(Object, String))
 import           Data.Aeson.Types (typeMismatch)
 import           Data.Attoparsec.Lazy (parse, eitherResult)
-import           Data.ByteString.Char8 (unpack)
+import qualified Data.ByteString.Char8 as BS8
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import qualified Data.ByteString.Base16 as BS16
 import           Data.ByteString (ByteString, append)
+import           Data.List (intercalate)
 import           Data.Serialize (encode)
 import           Data.Digest.Pure.MD5 (md5)
+import           Data.Time.LocalTime (ZonedTime)
+import           Data.Time.RFC3339 (showRFC3339)
 import           Data.Text (Text, pack)
 import           Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import           Data.List (sortBy)
@@ -63,8 +67,18 @@ getContacts :: RTMM (RTMResponse [User])
 getContacts = return . fmap unContacts =<< genericGet [] "rtm.contacts.getList"
 
 ---- Groups
+
 getGroups :: RTMM (RTMResponse [Group])
 getGroups = return . fmap unGroups =<< genericGet [] "rtm.groups.getList"
+
+---- Tasks
+getTasks :: Maybe ID -> [Filter] -> Maybe ZonedTime -> RTMM (RTMResponse [Task])
+getTasks tid fs lastSync = return . fmap unTasks =<< genericGet params "rtm.tasks.getList"
+  where params  = [tidQ,fltQ,lsQ]
+        tidQ    = ("task_id", encodeUtf8 `fmap` tid)
+        fltQ    = ("filter", Just $ BS8.pack fstring)
+        lsQ     = ("last_sync", (BS8.pack . showRFC3339) `fmap` lastSync)
+        fstring = (intercalate " " . map show) fs
 
 ---- Authentication
 
@@ -98,7 +112,7 @@ genAuthUrl frob sec key perms = U.URL { U.url_type   = ut,
         permVal Read   = "read"
         permVal Write  = "write"
         permVal Delete = "delete"
-        convert (k, v) = (unpack k, maybe "" unpack v)
+        convert (k, v) = (BS8.unpack k, maybe "" BS8.unpack v)
 
 ---- Helpers
 
@@ -122,8 +136,10 @@ doGet :: Query
          -> Text
          -> RTMM (Int, LBS.ByteString)
 doGet qs env meth = liftIO $ withManager $ \manager -> do
-  Response { statusCode = c, responseBody = b} <- httpLbsRedirect req manager
-  return (c, b)
+  --Response { statusCode = c, responseBody = b} <- httpLbsRedirect req manager
+  --return (c, b)
+  print . queryString $ req
+  return (500, "NOOO")
   where req = genRequest qs env meth
 
 --TODO: probably take RTMAuth instead of piecemeal
