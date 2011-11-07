@@ -110,7 +110,7 @@ instance FromJSON User where
   parseJSON (Object v) = User <$> v .: "id"
                               <*> v .:? "fullname"
                               <*> v .:? "username"
-  parseJSON v          = typeMismatch "RTMTokenSummary" v
+  parseJSON v          = typeMismatch "User" v
 
 data Group = Group { groupId       :: ID,
                      groupName     :: Text,
